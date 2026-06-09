@@ -7,3 +7,4 @@ output/
 dist/
 .vscode/
 static/wx/project.private.config.json
+.cache/
