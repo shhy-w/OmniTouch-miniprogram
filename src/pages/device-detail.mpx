@@ -1,0 +1,178 @@
+<template>
+  <view class="page" wx:if="{{device}}">
+    <view class="panel head">
+      <view class="halo">◈</view>
+      <view class="deviceName">{{device.name}}</view>
+      <view class="mac">{{device.status.mac}}</view>
+    </view>
+    <view class="health">
+      <view class="{{device.status.battery < 20 ? 'warnCard' : ''}}"><text>▰</text><text>{{device.status.battery}}%</text><text>电量</text></view>
+      <view><text>≋</text><text>{{device.status.rssi}}</text><text>信号 dBm</text></view>
+      <view><text>⇪</text><text>{{device.status.firmware}}</text><text>固件</text></view>
+      <view><text>▣</text><text>{{device.status.pcName}}</text><text>连接电脑</text></view>
+    </view>
+    <view class="panel">
+      <view class="row"><text>设备 ID</text><text>{{device.id}}</text></view>
+      <view class="row"><text>IP 地址</text><text>{{device.status.ip}}</text></view>
+      <view class="row"><text>固件版本</text><text>{{device.status.firmware}}</text></view>
+      <view class="row"><text>信号</text><text>{{device.status.rssi}} dBm</text></view>
+      <view class="row"><text>电池</text><text>{{device.status.battery}}% {{device.status.charging ? '充电中' : '放电中'}}</text></view>
+    </view>
+    <button class="action" bindtap="checkOta">检查固件更新</button>
+    <button class="action" bindtap="rename">重命名设备</button>
+    <button class="danger" bindtap="remove">删除此设备</button>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core'
+import { deviceStore } from '@/stores/device'
+import type { Device } from '@/types/device'
+
+createPage({
+  data: {
+    device: null as Device | null
+  },
+  onLoad(options: { id?: string }) {
+    if (options.id) deviceStore.currentDeviceId = options.id
+    this.refresh()
+  },
+  methods: {
+    refresh() {
+      this.setData({ device: deviceStore.currentDevice || null })
+    },
+    checkOta() {
+      wx.showToast({ title: '当前已是最新固件', icon: 'none' })
+    },
+    rename() {
+      const device = deviceStore.currentDevice
+      if (!device) return
+      wx.showModal({
+        title: '重命名设备',
+        editable: true,
+        placeholderText: device.name,
+        success: (res) => {
+          if (res.confirm && res.content.trim()) {
+            deviceStore.renameDevice(device.id, res.content.trim())
+            this.refresh()
+          }
+        }
+      })
+    },
+    remove() {
+      const device = deviceStore.currentDevice
+      if (!device) return
+      wx.showModal({
+        title: '删除设备',
+        content: `确认解除绑定 ${device.name}？`,
+        success: (res) => {
+          if (res.confirm) {
+            deviceStore.removeDevice(device.id)
+            wx.navigateBack()
+          }
+        }
+      })
+    }
+  }
+})
+</script>
+
+<style>
+.page {
+  min-height: 100vh;
+  padding: 40rpx 28rpx;
+  background:
+    radial-gradient(circle at 50% 4%, rgba(59, 130, 246, 0.22), transparent 34%),
+    linear-gradient(180deg, #0f172a, #111827 54%, #08111f);
+  box-sizing: border-box;
+}
+.panel {
+  margin-bottom: 24rpx;
+  padding: 28rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.94));
+  border: 1rpx solid rgba(148, 163, 184, 0.14);
+}
+.head {
+  text-align: center;
+}
+.halo {
+  width: 112rpx;
+  height: 112rpx;
+  margin: 0 auto 18rpx;
+  border-radius: 50%;
+  color: #dbeafe;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.32), rgba(59, 130, 246, 0.16));
+  line-height: 112rpx;
+  box-shadow: 0 0 58rpx rgba(34, 211, 238, 0.22);
+}
+.deviceName {
+  color: #f8fafc;
+  font-size: 42rpx;
+  font-weight: 800;
+}
+.mac {
+  margin-top: 12rpx;
+  color: #94a3b8;
+  font-size: 24rpx;
+}
+.health {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18rpx;
+  margin-bottom: 24rpx;
+}
+.health view {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 22rpx;
+  border: 1rpx solid rgba(96, 165, 250, 0.16);
+  border-radius: 14rpx;
+  color: #94a3b8;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.9));
+  font-size: 22rpx;
+}
+.health text:nth-child(2) {
+  color: #f8fafc;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+.warnCard text:nth-child(2) {
+  color: #fbbf24;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 18rpx 0;
+  color: #cbd5e1;
+  font-size: 26rpx;
+  border-bottom: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+.row text:first-child {
+  color: #94a3b8;
+}
+button {
+  height: 88rpx;
+  margin-bottom: 18rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+.action {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb 64%, #22d3ee);
+  box-shadow: 0 12rpx 34rpx rgba(59, 130, 246, 0.24);
+}
+.danger {
+  color: #fecaca;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(127, 29, 29, 0.16));
+}
+</style>
+
+<script type="application/json">
+{
+  "navigationBarTitleText": "设备详情",
+  "navigationBarBackgroundColor": "#111827",
+  "navigationBarTextStyle": "white"
+}
+</script>

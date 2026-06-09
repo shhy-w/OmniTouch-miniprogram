@@ -13,8 +13,18 @@ createApp({})
 <script type="application/json">
   {
     "pages": [
-      "./pages/index"
-    ]
+      "./pages/index",
+      "./pages/device-list",
+      "./pages/remote-control",
+      "./pages/device-detail",
+      "./pages/provisioning",
+      "./pages/settings"
+    ],
+    "window": {
+      "navigationBarBackgroundColor": "#111827",
+      "navigationBarTextStyle": "white",
+      "backgroundColor": "#111827"
+    }
   }
 </script>
 

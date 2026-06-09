@@ -1,0 +1,209 @@
+<template>
+  <view class="page">
+    <view class="header">
+      <view>
+        <view class="eyebrow">多模态智能交互终端</view>
+        <view class="title">我的设备</view>
+      </view>
+      <button class="add" bindtap="goProvisioning">＋</button>
+    </view>
+    <view class="dashboard">
+      <view class="orb">⌬</view>
+      <view class="stat"><text>{{onlineCount}}</text><text>在线</text></view>
+      <view class="stat"><text>{{offlineCount}}</text><text>离线</text></view>
+      <view class="stat"><text>{{queueCount}}</text><text>待补发</text></view>
+    </view>
+    <input class="search" placeholder="搜索设备名称或 ID" placeholder-class="placeholder" value="{{keyword}}" bindinput="onSearch" />
+    <view class="list" wx:if="{{filteredDevices.length}}">
+      <device-card wx:for="{{filteredDevices}}" wx:key="id" device="{{item}}" bindcontrol="goControl" binddetail="goDetail"></device-card>
+    </view>
+    <empty-state wx:else title="还没有设备" desc="扫码或热点配网后，设备会出现在这里"></empty-state>
+    <view class="tabbar">
+      <view class="tab active">设备</view>
+      <view class="tab" bindtap="goSettings">设置</view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core'
+import { deviceStore } from '@/stores/device'
+import type { Device } from '@/types/device'
+
+createPage({
+  data: {
+    keyword: '',
+    devices: [] as Device[],
+    filteredDevices: [] as Device[],
+    onlineCount: 0,
+    offlineCount: 0,
+    queueCount: 0
+  },
+  onShow() {
+    this.refresh()
+  },
+  methods: {
+    refresh() {
+      const onlineCount = deviceStore.devices.filter((device) => device.status.online).length
+      this.setData({
+        devices: deviceStore.devices,
+        filteredDevices: this.filter(deviceStore.devices, this.keyword),
+        onlineCount,
+        offlineCount: deviceStore.devices.length - onlineCount,
+        queueCount: deviceStore.offlineQueue.length
+      })
+    },
+    filter(devices: Device[], keyword: string) {
+      const word = keyword.trim().toLowerCase()
+      if (!word) return devices
+      return devices.filter((device) => {
+        return device.name.toLowerCase().includes(word) || device.id.toLowerCase().includes(word)
+      })
+    },
+    onSearch(event: { detail: { value: string } }) {
+      const keyword = event.detail.value
+      this.setData({ keyword, filteredDevices: this.filter(this.devices, keyword) })
+    },
+    goControl(event: { detail: { id: string } }) {
+      deviceStore.selectDevice(event.detail.id)
+      wx.navigateTo({ url: `/pages/remote-control?id=${event.detail.id}` })
+    },
+    goDetail(event: { detail: { id: string } }) {
+      wx.navigateTo({ url: `/pages/device-detail?id=${event.detail.id}` })
+    },
+    goProvisioning() {
+      wx.navigateTo({ url: '/pages/provisioning' })
+    },
+    goSettings() {
+      wx.navigateTo({ url: '/pages/settings' })
+    }
+  }
+})
+</script>
+
+<style>
+.page {
+  min-height: 100vh;
+  padding: 116rpx 28rpx 128rpx;
+  background:
+    radial-gradient(circle at 82% 8%, rgba(59, 130, 246, 0.24), transparent 34%),
+    radial-gradient(circle at 10% 18%, rgba(34, 211, 238, 0.13), transparent 30%),
+    linear-gradient(180deg, #0f172a 0%, #111827 48%, #08111f 100%);
+  box-sizing: border-box;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.eyebrow {
+  color: #60a5fa;
+  font-size: 24rpx;
+}
+.title {
+  margin-top: 8rpx;
+  color: #f8fafc;
+  font-size: 48rpx;
+  font-weight: 800;
+}
+.add {
+  width: 142rpx;
+  height: 76rpx;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa, #3b82f6 56%, #22d3ee);
+  box-shadow: 0 18rpx 48rpx rgba(59, 130, 246, 0.38);
+  font-size: 38rpx;
+  line-height: 76rpx;
+}
+.dashboard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92rpx 1fr 1fr 1fr;
+  align-items: center;
+  gap: 16rpx;
+  margin: 32rpx 0 28rpx;
+  padding: 22rpx;
+  border: 1rpx solid rgba(96, 165, 250, 0.18);
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.74));
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.06);
+}
+.orb {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 50%;
+  color: #dbeafe;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.34), rgba(59, 130, 246, 0.16));
+  text-align: center;
+  line-height: 76rpx;
+  box-shadow: 0 0 42rpx rgba(34, 211, 238, 0.28);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  color: #94a3b8;
+  font-size: 22rpx;
+}
+.stat text:first-child {
+  color: #f8fafc;
+  font-size: 34rpx;
+  font-weight: 800;
+}
+.search {
+  height: 84rpx;
+  margin: 0 0 24rpx;
+  padding: 0 28rpx;
+  border-radius: 12rpx;
+  color: #e2e8f0;
+  background: rgba(23, 32, 51, 0.88);
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+  font-size: 28rpx;
+}
+.placeholder {
+  color: #64748b;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+.tabbar {
+  position: fixed;
+  right: 28rpx;
+  bottom: 28rpx;
+  left: 28rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 10rpx;
+  border-radius: 16rpx;
+  background: rgba(23, 32, 51, 0.92);
+  border: 1rpx solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 16rpx 50rpx rgba(2, 6, 23, 0.38);
+}
+.tab {
+  height: 72rpx;
+  border-radius: 10rpx;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 72rpx;
+}
+.active {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb 70%, #22d3ee);
+}
+</style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "device-card": "../components/device-card",
+    "empty-state": "../components/empty-state"
+  },
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "我的设备",
+  "navigationBarBackgroundColor": "#111827",
+  "navigationBarTextStyle": "white"
+}
+</script>

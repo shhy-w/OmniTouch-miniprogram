@@ -1,0 +1,404 @@
+<template>
+  <view class="page" wx:if="{{device}}">
+    <view class="top">
+      <view>
+        <view class="name">{{device.name}}</view>
+        <view class="sub">{{device.status.pcName}} · {{connected ? 'MQTT 已连接' : '本地模拟/离线'}}</view>
+      </view>
+      <button class="more" bindtap="goDetail">⋯</button>
+    </view>
+
+    <view class="status">
+      <status-pill label="{{device.status.online ? '在线' : '离线'}}" tone="{{device.status.online ? 'green' : 'red'}}"></status-pill>
+      <status-pill label="{{device.status.locked ? '已锁定' : '已解锁'}}" tone="{{device.status.locked ? 'amber' : 'blue'}}"></status-pill>
+      <view class="metric">🔋 {{device.status.battery}}%</view>
+      <view class="metric">📶 {{device.status.rssi}} dBm</view>
+    </view>
+
+    <view class="hero">
+      <view class="radar {{connected ? 'radarOnline' : ''}}">
+        <view class="ring"></view>
+        <view class="core">◈</view>
+      </view>
+      <view class="mode">{{modeText}}演示模式</view>
+      <view class="pageNo">第 {{device.status.currentPage}} 页 / 共 {{device.status.totalPages}} 页</view>
+      <view class="zoom {{device.status.battery < 20 ? 'warn' : ''}}">缩放 {{zoomPercent}}% · 背光 {{device.status.backlight}}% · 电量 {{device.status.battery}}%</view>
+    </view>
+
+    <view class="commandState {{lastCommand.state}}">
+      <text>{{lastCommand.label}}</text>
+      <text>{{lastCommand.detail}}</text>
+    </view>
+
+    <view class="controlGrid">
+      <control-button wx:for="{{commands}}" wx:key="cmd" icon="{{item.icon}}" label="{{item.label}}" cmd="{{item.cmd}}" disabled="{{buttonsDisabled}}" hint="{{buttonsDisabled ? '设备锁定/离线' : ''}}" busy="{{lastCommand.cmd === item.cmd && lastCommand.state === 'sending'}}" bindcommand="sendCommand"></control-button>
+    </view>
+
+    <view class="tools">
+      <control-button icon="●" label="{{device.status.laserOn ? '关闭激光' : '激光笔'}}" cmd="laser" accent="{{device.status.laserOn}}" disabled="{{!device.status.online}}" bindcommand="toggleLaser"></control-button>
+      <control-button icon="{{device.status.locked ? '🔓' : '🔒'}}" label="{{device.status.locked ? '解锁' : '锁定'}}" cmd="lock" accent="{{device.status.locked}}" disabled="{{!device.status.online}}" bindcommand="toggleLock"></control-button>
+      <control-button icon="◎" label="模式" cmd="mode" disabled="{{!device.status.online}}" bindcommand="chooseMode"></control-button>
+    </view>
+
+    <view class="voice">
+      <button class="voiceBtn" bindtouchstart="startVoice" bindtouchend="endVoice">{{recording ? '松开发送模拟语音' : '按住说话'}}</button>
+      <view class="wave {{recording ? 'recording' : ''}}">
+        <text></text><text></text><text></text><text></text>
+      </view>
+      <view class="samples">
+        <text wx:for="{{voiceSamples}}" wx:key="*this" bindtap="sendVoiceSample" data-text="{{item}}">{{item}}</text>
+      </view>
+    </view>
+
+    <view class="events">
+      <view class="sectionTitle">事件日志</view>
+      <view wx:for="{{events}}" wx:key="ts" class="event">{{item.event}} {{item.detail || item.reason || item.command || ''}}</view>
+      <view wx:if="{{!events.length}}" class="event muted">暂无设备事件</view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core'
+import { commandTextMap, controlCommands, modeOptions, voiceSamples } from '@/constants/commands'
+import { deviceStore } from '@/stores/device'
+import type { Device, DeviceEvent, LastCommand } from '@/types/device'
+
+const modeTextMap: Record<string, string> = {
+  voice: '语音',
+  gesture: '手势',
+  mqtt: '远程',
+  offline: '离线'
+}
+
+createPage({
+  data: {
+    device: null as Device | null,
+    connected: false,
+    commands: controlCommands,
+    voiceSamples,
+    events: [] as DeviceEvent[],
+    recording: false,
+    modeText: '',
+    zoomPercent: 100,
+    buttonsDisabled: false,
+    lastCommand: deviceStore.lastCommand as LastCommand
+  },
+  onLoad(options: { id?: string }) {
+    deviceStore.bindMqtt()
+    if (options.id) deviceStore.selectDevice(options.id)
+    this.refresh()
+  },
+  onShow() {
+    this.refresh()
+  },
+  onUnload() {
+    // 保持 store 数据，断开模拟连接以贴近小程序页面生命周期。
+  },
+  methods: {
+    refresh() {
+      const device = deviceStore.currentDevice || null
+      this.setData({
+        device,
+        connected: deviceStore.connected,
+        events: deviceStore.events,
+        lastCommand: deviceStore.lastCommand,
+        modeText: device ? modeTextMap[device.status.mode] : '',
+        zoomPercent: device ? Math.round(device.status.zoom * 100) : 100,
+        buttonsDisabled: !device?.status.online || !!device?.status.locked
+      })
+    },
+    sendCommand(event: { detail: { cmd: string } }) {
+      const command = controlCommands.find((item) => item.cmd === event.detail.cmd)
+      const sent = deviceStore.sendCommand(event.detail.cmd, command?.params)
+      this.afterSend(sent)
+    },
+    toggleLaser() {
+      const device = deviceStore.currentDevice
+      if (!device) return
+      const cmd = device.status.laserOn ? 'laser_off' : 'laser_on'
+      deviceStore.updateCurrentStatus({ laserOn: !device.status.laserOn })
+      this.afterSend(deviceStore.sendCommand(cmd))
+    },
+    toggleLock() {
+      const device = deviceStore.currentDevice
+      if (!device) return
+      const cmd = device.status.locked ? 'unlock' : 'lock'
+      deviceStore.updateCurrentStatus({ locked: !device.status.locked })
+      this.afterSend(deviceStore.sendCommand(cmd))
+    },
+    chooseMode() {
+      wx.showActionSheet({
+        itemList: modeOptions.map((item) => item.label),
+        success: (res) => {
+          const mode = modeOptions[res.tapIndex].value
+          deviceStore.updateCurrentStatus({ mode: mode as never })
+          this.afterSend(deviceStore.sendCommand('set_mode', { mode }))
+        }
+      })
+    },
+    startVoice() {
+      this.setData({ recording: true })
+    },
+    endVoice() {
+      this.setData({ recording: false })
+      this.sendVoiceText('下一页')
+    },
+    sendVoiceSample(event: { currentTarget: { dataset: { text: string } } }) {
+      this.sendVoiceText(event.currentTarget.dataset.text)
+    },
+    sendVoiceText(text: string) {
+      const cmd = commandTextMap[text]
+      const sent = deviceStore.sendVoiceText(text)
+      if (cmd) deviceStore.sendCommand(cmd)
+      this.afterSend(sent)
+    },
+    afterSend(sent: boolean) {
+      wx.showToast({
+        title: sent ? '指令已发送' : '设备离线，已缓存可补发指令',
+        icon: 'none'
+      })
+      this.refresh()
+    },
+    goDetail() {
+      const id = deviceStore.currentDeviceId
+      wx.navigateTo({ url: `/pages/device-detail?id=${id}` })
+    }
+  }
+})
+</script>
+
+<style>
+.page {
+  min-height: 100vh;
+  padding: 48rpx 28rpx 48rpx;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.24), transparent 36%),
+    radial-gradient(circle at 90% 24%, rgba(34, 211, 238, 0.14), transparent 34%),
+    linear-gradient(180deg, #0f172a 0%, #111827 50%, #08111f 100%);
+  box-sizing: border-box;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.name {
+  color: #f8fafc;
+  font-size: 42rpx;
+  font-weight: 800;
+}
+.sub,
+.zoom,
+.event {
+  color: #94a3b8;
+  font-size: 24rpx;
+}
+.more {
+  width: 72rpx;
+  height: 72rpx;
+  color: #dbeafe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(15, 23, 42, 0.9));
+  border-radius: 50%;
+  line-height: 72rpx;
+}
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 28rpx;
+}
+.metric {
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  color: #cbd5e1;
+  background: rgba(23, 32, 51, 0.86);
+  font-size: 22rpx;
+}
+.hero {
+  position: relative;
+  margin: 36rpx 0 26rpx;
+  padding: 38rpx 28rpx;
+  border-radius: 16rpx;
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.86), rgba(15, 23, 42, 0.92)),
+    repeating-linear-gradient(90deg, rgba(96, 165, 250, 0.08) 0, rgba(96, 165, 250, 0.08) 1rpx, transparent 1rpx, transparent 28rpx);
+  border: 1rpx solid rgba(96, 165, 250, 0.16);
+  overflow: hidden;
+}
+.radar {
+  position: absolute;
+  top: 24rpx;
+  right: 28rpx;
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2), transparent 62%);
+}
+.ring {
+  position: absolute;
+  inset: 10rpx;
+  border: 1rpx solid rgba(34, 211, 238, 0.3);
+  border-radius: 50%;
+  animation: spin 5s linear infinite;
+}
+.ring::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 1rpx;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.8), transparent);
+  content: '';
+  transform-origin: left center;
+}
+.core {
+  position: absolute;
+  inset: 42rpx;
+  color: #dbeafe;
+  text-align: center;
+  line-height: 48rpx;
+}
+.radarOnline {
+  box-shadow: 0 0 46rpx rgba(34, 211, 238, 0.2);
+}
+.mode {
+  color: #f8fafc;
+  font-size: 40rpx;
+  font-weight: 800;
+}
+.pageNo {
+  margin: 12rpx 0;
+  color: #bfdbfe;
+  font-size: 28rpx;
+}
+.warn {
+  color: #fbbf24;
+}
+.commandState {
+  display: flex;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-bottom: 20rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 14rpx;
+  color: #bfdbfe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(15, 23, 42, 0.82));
+  font-size: 23rpx;
+}
+.commandState text:first-child {
+  color: #f8fafc;
+  font-weight: 700;
+}
+.done {
+  color: #bbf7d0;
+}
+.cached {
+  color: #fde68a;
+}
+.failed {
+  color: #fecaca;
+}
+.controlGrid,
+.tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18rpx;
+}
+.tools {
+  grid-template-columns: 1fr 1fr 1fr;
+  margin-top: 18rpx;
+}
+.voice,
+.events {
+  margin-top: 28rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.9));
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+.voiceBtn {
+  height: 88rpx;
+  border-radius: 12rpx;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #7c3aed 64%, #22d3ee);
+  font-size: 28rpx;
+}
+.wave {
+  display: flex;
+  justify-content: center;
+  gap: 10rpx;
+  height: 42rpx;
+  margin-top: 16rpx;
+}
+.wave text {
+  width: 8rpx;
+  height: 18rpx;
+  border-radius: 999rpx;
+  background: rgba(147, 197, 253, 0.55);
+}
+.recording text {
+  animation: wave 0.9s ease-in-out infinite;
+}
+.recording text:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.recording text:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.recording text:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+.samples text {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.14);
+  font-size: 24rpx;
+}
+.sectionTitle {
+  margin-bottom: 14rpx;
+  color: #e2e8f0;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+.event {
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+.muted {
+  border-bottom: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes wave {
+  0%,
+  100% {
+    height: 14rpx;
+  }
+  50% {
+    height: 38rpx;
+  }
+}
+</style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "control-button": "../components/control-button",
+    "status-pill": "../components/status-pill"
+  },
+  "navigationBarTitleText": "远程控制",
+  "navigationBarBackgroundColor": "#111827",
+  "navigationBarTextStyle": "white"
+}
+</script>

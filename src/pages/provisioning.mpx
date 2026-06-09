@@ -1,0 +1,194 @@
+<template>
+  <view class="page">
+    <view class="title">添加设备</view>
+    <view class="steps">
+      <view class="step {{step >= 1 ? 'active' : ''}}"><text>⌖</text>扫码</view>
+      <view class="step {{step >= 2 ? 'active' : ''}}"><text>⌁</text>WiFi</view>
+      <view class="step {{step >= 3 ? 'active' : ''}}"><text>◇</text>绑定</view>
+    </view>
+
+    <view class="panel">
+      <view class="label">设备二维码</view>
+      <input class="input" value="{{qrText}}" bindinput="onQrInput" placeholder="扫码结果或 esp32-cb8824" placeholder-class="placeholder" />
+      <button class="ghost" bindtap="scanQr">扫码识别</button>
+    </view>
+
+    <view class="panel">
+      <view class="label">WiFi 名称</view>
+      <input class="input" value="{{ssid}}" bindinput="onSsidInput" placeholder="请输入实验室/会议室 WiFi" placeholder-class="placeholder" />
+      <view class="label space">WiFi 密码</view>
+      <input class="input" password value="{{password}}" bindinput="onPasswordInput" placeholder="请输入密码" placeholder-class="placeholder" />
+    </view>
+
+    <view class="progress" wx:if="{{progress > 0}}">
+      <view class="bar" style="width: {{progress}}%;"></view>
+    </view>
+    <button class="primary" loading="{{loading}}" bindtap="submit">开始配网并绑定</button>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core'
+import { simulateProvisioning } from '@/services/provisioning'
+import { deviceStore } from '@/stores/device'
+
+createPage({
+  data: {
+    step: 1,
+    qrText: 'esp32-cb8824',
+    ssid: '',
+    password: '',
+    loading: false,
+    progress: 0
+  },
+  methods: {
+    onQrInput(event: { detail: { value: string } }) {
+      this.setData({ qrText: event.detail.value, step: 1 })
+    },
+    onSsidInput(event: { detail: { value: string } }) {
+      this.setData({ ssid: event.detail.value, step: 2 })
+    },
+    onPasswordInput(event: { detail: { value: string } }) {
+      this.setData({ password: event.detail.value })
+    },
+    scanQr() {
+      wx.scanCode({
+        success: (res) => {
+          this.setData({ qrText: res.result, step: 2 })
+        },
+        fail: () => {
+          wx.showToast({ title: '可手动输入设备 ID', icon: 'none' })
+        }
+      })
+    },
+    submit() {
+      this.setData({ loading: true, progress: 28, step: 2 })
+      simulateProvisioning(this.qrText, { ssid: this.ssid, password: this.password })
+        .then((device) => {
+          this.setData({ progress: 100, step: 3 })
+          deviceStore.addDevice(device)
+          wx.showToast({ title: '绑定成功', icon: 'success' })
+          setTimeout(() => wx.redirectTo({ url: `/pages/remote-control?id=${device.id}` }), 500)
+        })
+        .catch((error: Error) => {
+          wx.showToast({ title: error.message, icon: 'none' })
+          this.setData({ progress: 0 })
+        })
+        .finally(() => {
+          this.setData({ loading: false })
+        })
+    }
+  }
+})
+</script>
+
+<style>
+.page {
+  min-height: 100vh;
+  padding: 48rpx 28rpx;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(34, 211, 238, 0.16), transparent 32%),
+    radial-gradient(circle at 88% 18%, rgba(124, 58, 237, 0.18), transparent 36%),
+    linear-gradient(180deg, #0f172a, #111827 54%, #08111f);
+  box-sizing: border-box;
+}
+.title {
+  color: #f8fafc;
+  font-size: 46rpx;
+  font-weight: 800;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin: 30rpx 0;
+}
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  height: 60rpx;
+  border-radius: 10rpx;
+  color: #64748b;
+  background: rgba(23, 32, 51, 0.84);
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+  text-align: center;
+  line-height: 60rpx;
+  font-size: 24rpx;
+}
+.active {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #7c3aed 68%, #22d3ee);
+  box-shadow: 0 12rpx 34rpx rgba(59, 130, 246, 0.22);
+}
+.panel {
+  margin-bottom: 24rpx;
+  padding: 26rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+.label {
+  margin-bottom: 12rpx;
+  color: #cbd5e1;
+  font-size: 26rpx;
+}
+.space {
+  margin-top: 22rpx;
+}
+.input {
+  height: 82rpx;
+  padding: 0 22rpx;
+  border-radius: 10rpx;
+  color: #e2e8f0;
+  background: #0f172a;
+  font-size: 28rpx;
+}
+.placeholder {
+  color: #64748b;
+}
+button {
+  height: 86rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+.ghost {
+  margin-top: 18rpx;
+  color: #bfdbfe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(34, 211, 238, 0.1));
+}
+.primary {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb 64%, #22d3ee);
+}
+.progress {
+  height: 12rpx;
+  margin: 8rpx 0 24rpx;
+  overflow: hidden;
+  border-radius: 999rpx;
+  background: #172033;
+}
+.bar {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #22d3ee, #3b82f6);
+  animation: progressGlow 1.2s ease-in-out infinite;
+}
+@keyframes progressGlow {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+</style>
+
+<script type="application/json">
+{
+  "navigationBarTitleText": "设备配网",
+  "navigationBarBackgroundColor": "#111827",
+  "navigationBarTextStyle": "white"
+}
+</script>

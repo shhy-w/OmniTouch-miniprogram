@@ -1,0 +1,124 @@
+<template>
+  <button class="control {{disabled ? 'disabled' : ''}} {{accent ? 'accent' : ''}} {{busy ? 'busy' : ''}}" disabled="{{disabled}}" bindtap="tap">
+    <text class="icon">{{icon}}</text>
+    <text class="label">{{label}}</text>
+    <text wx:if="{{hint}}" class="hint">{{hint}}</text>
+  </button>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core'
+
+createComponent({
+  properties: {
+    icon: { type: String, value: '' },
+    label: { type: String, value: '' },
+    cmd: { type: String, value: '' },
+    disabled: { type: Boolean, value: false },
+    accent: { type: Boolean, value: false },
+    busy: { type: Boolean, value: false },
+    hint: { type: String, value: '' }
+  },
+  data: {
+    lastTap: 0
+  },
+  methods: {
+    tap() {
+      const now = Date.now()
+      if (now - this.lastTap < 200) return
+      this.lastTap = now
+      if (typeof wx !== 'undefined') wx.vibrateShort({ type: 'light' })
+      this.triggerEvent('command', { cmd: this.cmd })
+    }
+  }
+})
+</script>
+
+<style>
+.control {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 156rpx;
+  border-radius: 14rpx;
+  color: #eff6ff;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(124, 58, 237, 0.16)),
+    #1d2a44;
+  border: 1rpx solid rgba(59, 130, 246, 0.24);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.08), 0 18rpx 48rpx rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.control::before {
+  position: absolute;
+  top: -40rpx;
+  right: -40rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: rgba(34, 211, 238, 0.16);
+  content: '';
+}
+.control::after {
+  border: none;
+}
+.control:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 34rpx rgba(59, 130, 246, 0.32);
+}
+.icon {
+  position: relative;
+  font-size: 46rpx;
+  line-height: 1;
+  text-shadow: 0 0 20rpx rgba(96, 165, 250, 0.45);
+}
+.label {
+  position: relative;
+  margin-top: 14rpx;
+  font-size: 26rpx;
+}
+.hint {
+  position: relative;
+  margin-top: 6rpx;
+  color: #93c5fd;
+  font-size: 20rpx;
+}
+.accent {
+  color: #fff7ed;
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.34), rgba(239, 68, 68, 0.14)),
+    #2a2130;
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 34rpx rgba(245, 158, 11, 0.22);
+}
+.busy {
+  box-shadow: 0 0 42rpx rgba(34, 211, 238, 0.26);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+.disabled {
+  color: #64748b;
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92)),
+    #172033;
+  border-color: rgba(100, 116, 139, 0.16);
+  box-shadow: none;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.018);
+  }
+}
+</style>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>

@@ -1,5 +1,5 @@
 <template>
-  <list></list>
+  <view></view>
 </template>
 
 <script lang="ts">
@@ -7,15 +7,7 @@ import { createPage } from '@mpxjs/core'
 
 createPage({
   onLoad() {
-    //
+    wx.redirectTo({ url: '/pages/device-list' })
   }
 })
-</script>
-
-<script type="application/json">
-  {
-    "usingComponents": {
-      "list": "../components/list"
-    }
-  }
 </script>

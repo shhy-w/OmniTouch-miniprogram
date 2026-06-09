@@ -4,11 +4,12 @@
  */
  module.exports = {
   // rootDir: path.join(__dirname),
-  moduleFileExtensions: ['js', 'mpx', 'json'],
+  moduleFileExtensions: ['js', 'ts', 'mpx', 'json'],
   testEnvironment: 'jsdom',
   moduleNameMapper: {
     // webpack的alias需要在此处理
-    '^src(.*)': '<rootDir>/src/$1'
+    '^src(.*)': '<rootDir>/src/$1',
+    '^@/(.*)$': '<rootDir>/src/$1'
   },
   testPathIgnorePatterns: ['dist', 'node_modules'],
   testURL: 'http://test.api.com',
