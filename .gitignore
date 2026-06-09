@@ -6,3 +6,4 @@ deploy/
 output/
 dist/
 .vscode/
+static/wx/project.private.config.json
