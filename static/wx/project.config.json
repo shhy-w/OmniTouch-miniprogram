@@ -1,0 +1,15 @@
+{
+  "setting": {
+    "newFeature": true,
+    "urlCheck": true,
+    "es6": false,
+    "postcss": true,
+    "minified": false,
+    "checkSiteMap": false,
+    "autoAudits": false
+  },
+  "appid": "wx8264850930cae48f",
+  "projectname": "mpx-project",
+  "description": "多模态智能交互终端",
+  "condition": {}
+}
